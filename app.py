@@ -13,7 +13,7 @@ DB_CONFIG = {
 }
 
 def get_db_connection():
-    
+    """Cria e retorna uma nova conexão com o banco."""
     try:
         conn = mysql.connector.connect(**DB_CONFIG)
         return conn
@@ -26,14 +26,16 @@ def get_db_connection():
 def index():
     return render_template('index.html')
 
-
-def handle_db_error(err, redirect_url):
-    
-    if err.errno == 1451: 
-        flash('Erro: Não é possível excluir este item pois ele está sendo usado em outra tabela (ex: um livro associado a este autor).', 'error')
-    else:
-        flash(f'Erro no banco de dados: {err.msg}', 'error')
-    return redirect(redirect_url)
+@app.route('/auditoria')
+def listar_auditoria():
+    conn = get_db_connection()
+    if not conn: return "Erro de conexão.", 500
+    cursor = conn.cursor(dictionary=True)
+    cursor.execute("SELECT * FROM Auditoria_Logs ORDER BY Data_hora DESC LIMIT 50")
+    logs = cursor.fetchall()
+    cursor.close()
+    conn.close()
+    return render_template('auditoria_lista.html', logs=logs)
 
 @app.route('/autores')
 def listar_autores():
@@ -100,7 +102,9 @@ def excluir_autor(id):
         conn.close()
     return redirect(url_for('listar_autores'))
 
-
+# -------------------------------------------------------------------
+# --- CRUD: GENEROS
+# -------------------------------------------------------------------
 
 @app.route('/generos')
 def listar_generos():
@@ -159,6 +163,9 @@ def excluir_genero(id):
         conn.close()
     return redirect(url_for('listar_generos'))
 
+# -------------------------------------------------------------------
+# --- CRUD: EDITORAS
+# -------------------------------------------------------------------
 
 @app.route('/editoras')
 def listar_editoras():
@@ -221,7 +228,9 @@ def excluir_editora(id):
         conn.close()
     return redirect(url_for('listar_editoras'))
 
-
+# -------------------------------------------------------------------
+# --- CRUD: USUARIOS
+# -------------------------------------------------------------------
 
 @app.route('/usuarios')
 def listar_usuarios():
@@ -305,6 +314,9 @@ def excluir_usuario(id):
         conn.close()
     return redirect(url_for('listar_usuarios'))
 
+# -------------------------------------------------------------------
+# --- CRUD: LIVROS (com chaves estrangeiras)
+# -------------------------------------------------------------------
 
 def _get_dados_formulario_livro(conn):
     """Função auxiliar para buscar dados das tabelas FK (Autores, Generos, Editoras)."""
@@ -422,14 +434,16 @@ def excluir_livro(id):
         conn.close()
     return redirect(url_for('listar_livros'))
 
-
+# -------------------------------------------------------------------
+# --- CRUD: EMPRESTIMOS (com chaves estrangeiras)
+# -------------------------------------------------------------------
 
 def _get_dados_formulario_emprestimo(conn):
-   
+    """Função auxiliar para buscar dados das tabelas FK (Usuarios, Livros)."""
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT ID_usuario, Nome_usuario FROM Usuarios ORDER BY Nome_usuario")
     usuarios = cursor.fetchall()
-  
+    # Idealmente, aqui você filtraria livros com Quantidade_disponivel > 0
     cursor.execute("SELECT ID_livro, Titulo FROM Livros ORDER BY Titulo")
     livros = cursor.fetchall()
     cursor.close()
@@ -481,6 +495,7 @@ def novo_emprestimo():
         cursor = conn.cursor()
         cursor.execute(sql, valores)
         conn.commit()
+        # TODO: Em um app real, você deveria decrementar a Quantidade_disponivel do livro
         cursor.close()
         conn.close()
         return redirect(url_for('listar_emprestimos'))
@@ -516,6 +531,7 @@ def editar_emprestimo(id):
         cursor = conn.cursor()
         cursor.execute(sql, valores)
         conn.commit()
+        # TODO: Se o status mudou para 'devolvido', incrementar Quantidade_disponivel
         cursor.close()
         conn.close()
         return redirect(url_for('listar_emprestimos'))
@@ -545,3 +561,6 @@ def excluir_emprestimo(id):
         conn.close()
     return redirect(url_for('listar_emprestimos'))
 
+# --- Execução da Aplicação ---
+if __name__ == '__main__':
+    app.run(debug=True)
